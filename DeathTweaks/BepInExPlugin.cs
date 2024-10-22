@@ -10,7 +10,7 @@ using UnityEngine;
 
 namespace DeathTweaks
 {
-    [BepInPlugin("aedenthorn.DeathTweaks", "Death Tweaks", "1.3.0")]
+    [BepInPlugin("aedenthorn.DeathTweaks", "Death Tweaks", "1.3.1")]
     public class BepInExPlugin : BaseUnityPlugin
     {
         public static ConfigEntry<bool> modEnabled;
@@ -488,15 +488,14 @@ namespace DeathTweaks
             }
         }
 
-
-        [HarmonyPatch(typeof(Terminal), "InputText")]
-        static class InputText_Patch
+        [HarmonyPatch(typeof(Terminal), "TryRunCommand")]
+        static class TryRunCommand_Patch
         {
-            static bool Prefix(Terminal __instance)
+            static bool Prefix(Terminal __instance, ref string text)
             {
                 if (!modEnabled.Value)
                     return true;
-                string text = __instance.m_input.text;
+
                 if (text.ToLower().Equals($"{typeof(BepInExPlugin).Namespace.ToLower()} reset"))
                 {
                     context.Config.Reload();
