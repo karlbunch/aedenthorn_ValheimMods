@@ -1,6 +1,9 @@
-﻿using BepInEx;
+﻿#undef FULL_CONFIG
+
+using BepInEx;
 using BepInEx.Bootstrap;
 using BepInEx.Configuration;
+using BepInEx.Logging;
 using HarmonyLib;
 using System;
 using System.Collections.Generic;
@@ -10,13 +13,15 @@ using UnityEngine;
 
 namespace DeathTweaks
 {
-    [BepInPlugin("aedenthorn.DeathTweaks", "Death Tweaks", "1.3.1")]
+    [BepInPlugin("aedenthorn.DeathTweaks", "Death Tweaks", "1.3.3")]
     public class BepInExPlugin : BaseUnityPlugin
     {
+        public new static ManualLogSource Logger { get; private set; }
+
         public static ConfigEntry<bool> modEnabled;
         public static ConfigEntry<bool> isDebug;
         public static ConfigEntry<int> nexusID;
-
+#if FULL_CONFIG
         public static ConfigEntry<bool> keepEquippedItems;
         public static ConfigEntry<bool> keepHotbarItems;
         public static ConfigEntry<bool> keepAllItems;
@@ -26,7 +31,9 @@ namespace DeathTweaks
         public static ConfigEntry<bool> keepFoodLevels;
         public static ConfigEntry<bool> keepQuickSlotItems;
         public static ConfigEntry<bool> keepTeleportableItems;
+#endif
         public static ConfigEntry<bool> createDeathEffects;
+#if FULL_CONFIG
         public static ConfigEntry<bool> reduceSkills;
         public static ConfigEntry<bool> noSkillProtection;
         public static ConfigEntry<bool> useFixedSpawnCoordinates;
@@ -47,22 +54,30 @@ namespace DeathTweaks
         private static List<string> typeEnums = new List<string>();
 
         private static Assembly quickSlotsAssembly;
+#endif
+#if FULL_CONFIG
         public static void Dbgl(string str = "", bool pref = true)
         {
             if (isDebug.Value)
-                Debug.Log((pref ? typeof(BepInExPlugin).Namespace + " " : "") + str);
+                Logger.LogInfo((pref ? typeof(BepInExPlugin).Namespace + " " : "") + str);
         }
+#endif
         private void Awake()
         {
+            Logger = base.Logger;
+            Logger.LogInfo($"DLL Location: {GetType().Assembly.Location}");
+#if FULL_CONFIG
             foreach (int i in Enum.GetValues(typeof(ItemDrop.ItemData.ItemType)))
             {
                 typeEnums.Add(Enum.GetName(typeof(ItemDrop.ItemData.ItemType), i));
             }
 
             context = this;
+#endif
             modEnabled = Config.Bind<bool>("General", "Enabled", true, "Enable this mod");
             isDebug = Config.Bind<bool>("General", "IsDebug", true, "Enable debug logs");
             nexusID = Config.Bind<int>("General", "NexusID", 1068, "Nexus mod ID for updates");
+#if FULL_CONFIG
             keepItemTypes = Config.Bind<string>("ItemLists", "KeepItemTypes", "", $"List of items to keep (comma-separated). Leave empty if using DropItemTypes. Valid types: {string.Join(",", typeEnums)}");
             dropItemTypes = Config.Bind<string>("ItemLists", "DropItemTypes", "", $"List of items to drop (comma-separated). Leave empty if using KeepItemTypes. Valid types: {string.Join(",", typeEnums)}");
             destroyItemTypes = Config.Bind<string>("ItemLists", "DestroyItemTypes", "", $"List of items to destroy (comma-separated). Overrides other lists. Valid types: {string.Join(",", typeEnums)}");
@@ -77,7 +92,9 @@ namespace DeathTweaks
             keepTeleportableItems = Config.Bind<bool>("Toggles", "KeepTeleportableItems", false, "Doesn't override item lists.");
             keepHotbarItems = Config.Bind<bool>("Toggles", "KeepHotbarItems", false, "Overrides item lists if true.");
             useTombStone = Config.Bind<bool>("Toggles", "UseTombStone", true, "Use tombstone (if false, drops items on ground).");
+#endif
             createDeathEffects = Config.Bind<bool>("Toggles", "CreateDeathEffects", true, "Create death effects.");
+#if FULL_CONFIG
             keepFoodLevels = Config.Bind<bool>("Toggles", "KeepFoodLevels", false, "Keep food levels.");
             keepQuickSlotItems = Config.Bind<bool>("Toggles", "KeepQuickSlotItems", false, "Keep QuickSlot items.");
             
@@ -88,10 +105,11 @@ namespace DeathTweaks
             noSkillProtection = Config.Bind<bool>("Skills", "NoSkillProtection", false, "Prevents skill protection after death.");
             reduceSkills = Config.Bind<bool>("Skills", "ReduceSkills", true, "Reduce skills.");
             skillReduceFactor = Config.Bind<float>("Skills", "SkillReduceFactor", 0.25f, "Reduce skills by this fraction.");
-
+#endif
             Harmony.CreateAndPatchAll(Assembly.GetExecutingAssembly(), null);
 
         }
+#if FULL_CONFIG
         private void Start()
         {
             if (Chainloader.PluginInfos.ContainsKey("randyknapp.mods.equipmentandquickslots"))
@@ -108,6 +126,7 @@ namespace DeathTweaks
                 inventory = i;
             }
         }
+#endif // FULL_CONFIG
 
         [HarmonyPatch(typeof(Player), "OnDeath")]
         [HarmonyPriority(Priority.First)]
@@ -189,8 +208,9 @@ namespace DeathTweaks
                 if (createDeathEffects.Value)
                     Traverse.Create(__instance).Method("CreateDeathEffects").GetValue();
 
+#if FULL_CONFIG
                 List<InventoryInfos> drop_inventorys = new List<InventoryInfos>();
-                
+
 
                 if (!keepAllItems.Value)
                 {
@@ -386,14 +406,19 @@ namespace DeathTweaks
 
                 if (!keepFoodLevels.Value)
                     ___m_foods.Clear();
-
                 bool hardDeath = noSkillProtection.Value || ___m_timeSinceDeath > ___m_hardDeathCooldown;
+#else // FULL_CONFIG
+                bool hardDeath = ___m_timeSinceDeath > ___m_hardDeathCooldown;
 
+                Logger.LogInfo($"** OnDeath_Patch.Prefix(): hardDeath={hardDeath}");
+#endif // FULL_CONFIG
+
+#if FULL_CONFIG
                 if (hardDeath && reduceSkills.Value)
                 {
                     ___m_skills.LowerAllSkills(skillReduceFactor.Value);
                 }
-
+#endif // FULL_CONFIG
                 ___m_seman.RemoveAllStatusEffects(false);
                 Game.instance.RequestRespawn(10f);
                 ___m_timeSinceDeath = 0;
@@ -408,6 +433,7 @@ namespace DeathTweaks
 
                 if (__instance.m_onDeath != null)
                 {
+                    Logger.LogInfo($"** OnDeath_Patch.Prefix(): Running __instance.m_onDeath()...");
                     __instance.m_onDeath();
                 }
 
@@ -424,13 +450,18 @@ namespace DeathTweaks
         {
             static bool Prefix(ref bool __result)
             {
+#if FULL_CONFIG
                 if (!modEnabled.Value || !noSkillProtection.Value)
+#else // FULL_CONFIG
+                if (!modEnabled.Value)
+#endif
                     return true;
                 __result = true;
+                Logger.LogInfo($"HardDeath_Patch.Prefix(): __result={__result}");
                 return false;
             }
         }
-
+#if FULL_CONFIG
         [HarmonyPatch(typeof(Game), "FindSpawnPoint")]
         static class FindSpawnPoint_Patch
         {
@@ -508,5 +539,6 @@ namespace DeathTweaks
                 return true;
             }
         }
+#endif
     }
 }
